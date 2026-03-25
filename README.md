@@ -1,0 +1,73 @@
+# mdj/db-optimizer-agent
+
+Laravel 11 package for local/staging database query diagnostics.
+
+## Features
+- `DB::listen` query interception
+- N+1 suspicion signals
+- Missing index hints from `WHERE` / `JOIN`
+- Auto `EXPLAIN` on slow queries
+- Cache candidate hints
+- Built-in dashboard + remote scanner + protected agent API
+
+## Install in another Laravel project (local path)
+
+1. In target project `composer.json`, add local repository:
+
+```json
+{
+	"repositories": [
+		{
+			"type": "path",
+			"url": "../db-optimizer-tool/packages/db-optimizer-agent",
+			"options": {
+				"symlink": true
+			}
+		}
+	]
+}
+```
+
+2. Require package:
+
+```bash
+composer require mdj/db-optimizer-agent:* --dev
+```
+
+3. Publish config:
+
+```bash
+php artisan vendor:publish --tag=db-optimizer-config
+```
+
+4. Set `.env`:
+
+```dotenv
+DB_OPTIMIZER_ENABLED=true
+DB_OPTIMIZER_AGENT_TOKEN=change-me
+DB_OPTIMIZER_ROUTE_PREFIX=_db-optimizer
+```
+
+5. Visit dashboard:
+
+`http://your-app.test/_db-optimizer`
+
+## Install from Git/Packagist
+
+After publishing package to GitHub + Packagist:
+
+```bash
+composer require mdj/db-optimizer-agent --dev
+php artisan vendor:publish --tag=db-optimizer-config
+```
+
+## Agent API
+- `GET /_db-optimizer/agent/ping`
+- `GET /_db-optimizer/agent/snapshots`
+- `POST /_db-optimizer/agent/reset`
+
+Send `Authorization: Bearer <DB_OPTIMIZER_AGENT_TOKEN>`.
+
+## Notes
+- Use in local/staging first.
+- Keep `DB_OPTIMIZER_ENABLED=false` in production unless you intentionally sample traffic.
