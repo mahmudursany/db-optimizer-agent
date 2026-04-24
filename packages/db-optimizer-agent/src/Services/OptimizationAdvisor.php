@@ -75,7 +75,7 @@ class OptimizationAdvisor
                 'Resolve N+1 via eager loading',
                 'Repeated single-row relation queries detected.',
                 '-- repeated relation query pattern --',
-                "Model::query()->with(['relationName'])->get();",
+                $optimizedNPlusOne,
                 120,
                 false,
                 currentLaravel: $currentLaravel,

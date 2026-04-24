@@ -452,6 +452,15 @@ class QueryInterceptor
             return null;
         }
 
+        $functionRange = $this->findEnclosingFunctionRange($lines, $line);
+
+        if (is_array($functionRange)) {
+            [$start, $end] = $functionRange;
+            $slice = array_slice($lines, $start - 1, $end - $start + 1);
+
+            return implode("\n", $slice);
+        }
+
         $total = count($lines);
         $start = max(1, $line - 6);
         $end = min($total, $line + 12);
@@ -459,5 +468,52 @@ class QueryInterceptor
         $slice = array_slice($lines, $start - 1, $end - $start + 1);
 
         return implode("\n", $slice);
+    }
+
+    /**
+     * @param  array<int, string>  $lines
+     * @return array{0:int,1:int}|null
+     */
+    private function findEnclosingFunctionRange(array $lines, int $line): ?array
+    {
+        $total = count($lines);
+        $line = min(max(1, $line), $total);
+
+        $start = null;
+
+        for ($i = $line; $i >= 1; $i--) {
+            $candidate = $lines[$i - 1] ?? '';
+
+            if ((bool) preg_match('/^\s*(public|protected|private)?\s*function\s+[a-zA-Z_][\w]*\s*\(/', $candidate)) {
+                $start = $i;
+                break;
+            }
+        }
+
+        if ($start === null) {
+            return null;
+        }
+
+        $braceDepth = 0;
+        $opened = false;
+
+        for ($i = $start; $i <= $total; $i++) {
+            $current = $lines[$i - 1] ?? '';
+            $openCount = substr_count($current, '{');
+            $closeCount = substr_count($current, '}');
+
+            if ($openCount > 0) {
+                $opened = true;
+            }
+
+            $braceDepth += $openCount;
+            $braceDepth -= $closeCount;
+
+            if ($opened && $braceDepth <= 0) {
+                return [$start, $i];
+            }
+        }
+
+        return null;
     }
 }
