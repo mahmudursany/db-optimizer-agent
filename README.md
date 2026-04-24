@@ -76,6 +76,8 @@ This repository includes a complete DB optimizer tool with:
 - Missing index suggestions
 - Slow query `EXPLAIN` summary
 - Cache candidate hints
+- Advanced optimization recommendations with code hints
+- Optional safe auto-apply eligibility markers
 - Dashboard: `/_db-optimizer`
 - Remote scanner: `/_db-optimizer/scanner`
 - Agent API: `/_db-optimizer/agent/*`
@@ -111,3 +113,4 @@ Package guide:
 
 - `packages/db-optimizer-agent/README.md`
 - `PACKAGIST_PUBLISH.md`
+- `DB_OPTIMIZER_STEP_BY_STEP_BN.md`

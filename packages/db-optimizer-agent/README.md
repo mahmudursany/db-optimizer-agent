@@ -15,6 +15,8 @@ Install note:
 - Missing index hints from `WHERE` / `JOIN`
 - Auto `EXPLAIN` on slow queries
 - Cache candidate hints
+- Advanced optimization suggestions with code hints
+- Optional safe auto-apply eligibility flags
 - Built-in dashboard + remote scanner + protected agent API
 
 ## Install in another Laravel project (local path)
@@ -56,6 +58,9 @@ DB_OPTIMIZER_ROUTE_PREFIX=_db-optimizer
 DB_OPTIMIZER_CAPTURE_TESTING=false
 DB_OPTIMIZER_REGISTER_DASHBOARD_ROUTES=true
 DB_OPTIMIZER_REGISTER_AGENT_ROUTES=true
+DB_OPTIMIZER_ADVANCED_SUGGESTIONS=true
+DB_OPTIMIZER_AUTO_APPLY_SAFE=false
+DB_OPTIMIZER_RECOMMENDATION_LIMIT=8
 ```
 
 5. Visit dashboard:
@@ -83,3 +88,4 @@ Send `Authorization: Bearer <DB_OPTIMIZER_AGENT_TOKEN>`.
 - Keep `DB_OPTIMIZER_ENABLED=false` in production unless you intentionally sample traffic.
 - For existing projects with route conflicts, change `DB_OPTIMIZER_ROUTE_PREFIX`.
 - If you only want scanner API, set `DB_OPTIMIZER_REGISTER_DASHBOARD_ROUTES=false`.
+- Safe auto-apply only marks eligible suggestions; it does not rewrite your code automatically.

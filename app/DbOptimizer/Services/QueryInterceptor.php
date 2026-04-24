@@ -24,6 +24,7 @@ class QueryInterceptor
     public function __construct(
         private readonly QueryOriginResolver $originResolver,
         private readonly QueryMetricsStore $metricsStore,
+        private readonly OptimizationAdvisor $advisor,
     ) {
     }
 
@@ -67,6 +68,8 @@ class QueryInterceptor
         if ((float) $event->time >= (float) config('db_optimizer.slow_query_threshold_ms', 50)) {
             $metric['explain'] = $this->buildExplainSummary($event);
         }
+
+        $metric['recommendations'] = $this->advisor->recommend($event, $metric);
 
         $this->metricsStore->record($metric);
     }

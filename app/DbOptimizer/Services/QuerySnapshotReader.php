@@ -145,6 +145,8 @@ class QuerySnapshotReader
         $nPlusOneCount = 0;
         $missingIndexCount = 0;
         $cacheCandidateCount = 0;
+        $recommendationCount = 0;
+        $autoApplyEligibleCount = 0;
 
         foreach ($queries as $query) {
             if (! is_array($query)) {
@@ -170,6 +172,21 @@ class QuerySnapshotReader
             if ((bool) Arr::get($query, 'detectors.cache_candidate.is_candidate', false)) {
                 $cacheCandidateCount++;
             }
+
+            $recommendations = Arr::get($query, 'recommendations', []);
+            if (is_array($recommendations) && $recommendations !== []) {
+                $recommendationCount += count($recommendations);
+
+                foreach ($recommendations as $recommendation) {
+                    if (! is_array($recommendation)) {
+                        continue;
+                    }
+
+                    if ((bool) Arr::get($recommendation, 'auto_apply_eligible', false)) {
+                        $autoApplyEligibleCount++;
+                    }
+                }
+            }
         }
 
         $queryCount = count($queries);
@@ -182,6 +199,8 @@ class QuerySnapshotReader
             'n_plus_one_count' => $nPlusOneCount,
             'missing_index_suggestions' => $missingIndexCount,
             'cache_candidate_count' => $cacheCandidateCount,
+            'recommendation_count' => $recommendationCount,
+            'auto_apply_eligible_count' => $autoApplyEligibleCount,
         ];
     }
 }

@@ -58,6 +58,13 @@
                 <div class="bg-slate-900 border border-slate-800 rounded-xl p-4"><p class="text-xs text-slate-400">Slow Queries</p><p class="text-xl font-semibold">{{ data_get($report, 'summary.slow_query_count', 0) }}</p></div>
             </div>
 
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="bg-slate-900 border border-slate-800 rounded-xl p-4"><p class="text-xs text-slate-400">Missing Index</p><p class="text-xl font-semibold">{{ data_get($report, 'summary.missing_index_count', 0) }}</p></div>
+                <div class="bg-slate-900 border border-slate-800 rounded-xl p-4"><p class="text-xs text-slate-400">Cache Candidates</p><p class="text-xl font-semibold">{{ data_get($report, 'summary.cache_candidate_count', 0) }}</p></div>
+                <div class="bg-slate-900 border border-slate-800 rounded-xl p-4"><p class="text-xs text-slate-400">Recommendations</p><p class="text-xl font-semibold">{{ data_get($report, 'summary.recommendation_count', 0) }}</p></div>
+                <div class="bg-slate-900 border border-slate-800 rounded-xl p-4"><p class="text-xs text-slate-400">Auto-Apply Ready</p><p class="text-xl font-semibold">{{ data_get($report, 'summary.auto_apply_eligible_count', 0) }}</p></div>
+            </div>
+
             <div class="rounded-xl border border-slate-800 bg-slate-900 p-4">
                 <h2 class="font-semibold mb-3">Top Missing Index Suggestions</h2>
                 <div class="space-y-2 text-sm">
@@ -82,6 +89,34 @@
                         </div>
                     @empty
                         <div class="text-slate-400">No slow queries detected.</div>
+                    @endforelse
+                </div>
+            </div>
+
+            <div class="rounded-xl border border-slate-800 bg-slate-900 p-4">
+                <h2 class="font-semibold mb-3">Optimization Suggestions</h2>
+                <div class="space-y-3 text-xs">
+                    @forelse(data_get($report, 'issues.recommendations', []) as $rec)
+                        <div class="bg-slate-950 border border-slate-800 rounded-lg p-3">
+                            <div class="flex flex-wrap items-center gap-2 mb-2">
+                                <span class="px-2 py-1 rounded bg-blue-700/60 uppercase tracking-wide">{{ $rec['type'] ?? 'suggestion' }}</span>
+                                <span class="font-medium text-slate-100">{{ $rec['title'] ?? 'Recommendation' }}</span>
+                                <span class="text-slate-400">priority {{ $rec['priority'] ?? 0 }}</span>
+                                <span class="text-slate-400">confidence {{ $rec['confidence'] ?? 0 }}</span>
+                                @if(!empty($rec['safe_auto_apply']))
+                                    <span class="px-2 py-1 rounded bg-emerald-700/60">safe auto-apply</span>
+                                @endif
+                                @if(!empty($rec['auto_apply_eligible']))
+                                    <span class="px-2 py-1 rounded bg-emerald-700/80">eligible</span>
+                                @endif
+                            </div>
+                            <div class="text-slate-300 mb-2">{{ $rec['description'] ?? '' }}</div>
+                            @if(!empty($rec['code_hint']))
+                                <pre class="whitespace-pre-wrap overflow-x-auto text-slate-200 bg-slate-900 border border-slate-800 rounded p-2">{{ $rec['code_hint'] }}</pre>
+                            @endif
+                        </div>
+                    @empty
+                        <div class="text-slate-400">No advanced recommendations found yet.</div>
                     @endforelse
                 </div>
             </div>

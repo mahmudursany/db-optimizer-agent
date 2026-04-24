@@ -21,6 +21,13 @@
         <div class="bg-slate-900 border border-slate-800 rounded-xl p-4"><p class="text-xs text-slate-400">N+1</p><p class="text-xl font-semibold">{{ data_get($snapshot, 'summary.n_plus_one_count', 0) }}</p></div>
     </div>
 
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4"><p class="text-xs text-slate-400">Missing Index</p><p class="text-xl font-semibold">{{ data_get($snapshot, 'summary.missing_index_suggestions', 0) }}</p></div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4"><p class="text-xs text-slate-400">Cache Hints</p><p class="text-xl font-semibold">{{ data_get($snapshot, 'summary.cache_candidate_count', 0) }}</p></div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4"><p class="text-xs text-slate-400">Suggestions</p><p class="text-xl font-semibold">{{ data_get($snapshot, 'summary.recommendation_count', 0) }}</p></div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4"><p class="text-xs text-slate-400">Auto-Apply Ready</p><p class="text-xl font-semibold">{{ data_get($snapshot, 'summary.auto_apply_eligible_count', 0) }}</p></div>
+    </div>
+
     <div class="space-y-4">
         @foreach(data_get($snapshot, 'queries', []) as $query)
             <div class="rounded-xl border border-slate-800 bg-slate-900 p-4">
@@ -56,6 +63,32 @@
                     <div class="mt-3 text-xs text-amber-200">
                         <div class="font-medium">EXPLAIN</div>
                         <div>{{ data_get($query, 'explain.summary', 'No summary') }}</div>
+                    </div>
+                @endif
+
+                @if(!empty(data_get($query, 'recommendations', [])))
+                    <div class="mt-4 space-y-2">
+                        <div class="text-xs font-medium text-slate-300">Optimization Suggestions</div>
+                        @foreach(data_get($query, 'recommendations', []) as $recommendation)
+                            <div class="rounded-lg border border-slate-800 bg-slate-950 p-3 text-xs">
+                                <div class="flex flex-wrap items-center gap-2 mb-1">
+                                    <span class="px-2 py-1 rounded bg-blue-700/60 uppercase tracking-wide">{{ $recommendation['type'] ?? 'suggestion' }}</span>
+                                    <span class="font-medium text-slate-200">{{ $recommendation['title'] ?? 'Recommendation' }}</span>
+                                    <span class="text-slate-400">priority {{ $recommendation['priority'] ?? 0 }}</span>
+                                    <span class="text-slate-400">confidence {{ $recommendation['confidence'] ?? 0 }}</span>
+                                    @if(!empty($recommendation['safe_auto_apply']))
+                                        <span class="px-2 py-1 rounded bg-emerald-700/60">safe auto-apply</span>
+                                    @endif
+                                    @if(!empty($recommendation['auto_apply_eligible']))
+                                        <span class="px-2 py-1 rounded bg-emerald-700/80">eligible</span>
+                                    @endif
+                                </div>
+                                <div class="text-slate-300 mb-2">{{ $recommendation['description'] ?? '' }}</div>
+                                @if(!empty($recommendation['code_hint']))
+                                    <pre class="overflow-x-auto whitespace-pre-wrap text-slate-200 bg-slate-900 border border-slate-800 rounded p-2">{{ $recommendation['code_hint'] }}</pre>
+                                @endif
+                            </div>
+                        @endforeach
                     </div>
                 @endif
             </div>

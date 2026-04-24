@@ -160,6 +160,8 @@ class RemoteProjectScanner
         $slowQueries = array_slice(array_values(array_filter($allQueries, static fn (array $q): bool => isset($q['explain']))), 0, 20);
         $nPlusOne = array_slice(array_values(array_filter($allQueries, static fn (array $q): bool => (bool) Arr::get($q, 'detectors.n_plus_one.is_suspected', false))), 0, 20);
         $cacheCandidates = array_slice(array_values(array_filter($allQueries, static fn (array $q): bool => (bool) Arr::get($q, 'detectors.cache_candidate.is_candidate', false))), 0, 20);
+        $recommendations = [];
+        $autoApplyEligible = [];
 
         $missingIndexMap = [];
 
@@ -190,7 +192,25 @@ class RemoteProjectScanner
 
                 $missingIndexMap[$key]['count']++;
             }
+
+            $queryRecommendations = Arr::get($query, 'recommendations', []);
+            if (is_array($queryRecommendations)) {
+                foreach ($queryRecommendations as $recommendation) {
+                    if (! is_array($recommendation)) {
+                        continue;
+                    }
+
+                    $recommendations[] = $recommendation;
+
+                    if ((bool) Arr::get($recommendation, 'auto_apply_eligible', false)) {
+                        $autoApplyEligible[] = $recommendation;
+                    }
+                }
+            }
         }
+
+        usort($recommendations, static fn (array $a, array $b): int => ((int) ($b['priority'] ?? 0)) <=> ((int) ($a['priority'] ?? 0)));
+        usort($autoApplyEligible, static fn (array $a, array $b): int => ((int) ($b['priority'] ?? 0)) <=> ((int) ($a['priority'] ?? 0)));
 
         usort($requests, static fn (array $a, array $b): int => ((float) ($b['time_ms'] ?? 0)) <=> ((float) ($a['time_ms'] ?? 0)));
 
@@ -207,12 +227,16 @@ class RemoteProjectScanner
                 'n_plus_one_count' => count($nPlusOne),
                 'missing_index_count' => count($missingIndexMap),
                 'cache_candidate_count' => count($cacheCandidates),
+                'recommendation_count' => count($recommendations),
+                'auto_apply_eligible_count' => count($autoApplyEligible),
             ],
             'issues' => [
                 'slow_queries' => $slowQueries,
                 'n_plus_one' => $nPlusOne,
                 'missing_indexes' => array_values($missingIndexMap),
                 'cache_candidates' => $cacheCandidates,
+                'recommendations' => array_slice($recommendations, 0, 25),
+                'auto_apply_eligible' => array_slice($autoApplyEligible, 0, 25),
             ],
         ];
     }

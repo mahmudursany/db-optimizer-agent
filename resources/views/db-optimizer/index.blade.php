@@ -36,6 +36,7 @@
                         <th class="text-right px-4 py-3">N+1</th>
                         <th class="text-right px-4 py-3">Missing Index</th>
                         <th class="text-right px-4 py-3">Cache Hints</th>
+                        <th class="text-right px-4 py-3">Suggestions</th>
                         <th class="text-right px-4 py-3"></th>
                     </tr>
                 </thead>
@@ -53,6 +54,7 @@
                         <td class="px-4 py-3 text-right">{{ data_get($snapshot, 'summary.n_plus_one_count', 0) }}</td>
                         <td class="px-4 py-3 text-right">{{ data_get($snapshot, 'summary.missing_index_suggestions', 0) }}</td>
                         <td class="px-4 py-3 text-right">{{ data_get($snapshot, 'summary.cache_candidate_count', 0) }}</td>
+                        <td class="px-4 py-3 text-right">{{ data_get($snapshot, 'summary.recommendation_count', 0) }}</td>
                         <td class="px-4 py-3 text-right">
                             <a href="{{ route('db-optimizer.show', ['snapshotId' => $snapshot['id']]) }}" class="text-blue-300 hover:text-blue-200">Inspect</a>
                         </td>

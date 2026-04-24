@@ -28,6 +28,9 @@ return [
     'slow_query_threshold_ms' => (float) env('DB_OPTIMIZER_SLOW_MS', 50),
     'n_plus_one_repeat_threshold' => (int) env('DB_OPTIMIZER_N1_THRESHOLD', 5),
     'cache_candidate_repeat_threshold' => (int) env('DB_OPTIMIZER_CACHE_REPEAT_THRESHOLD', 8),
+    'advanced_suggestions' => env('DB_OPTIMIZER_ADVANCED_SUGGESTIONS', true),
+    'auto_apply_safe_optimizations' => env('DB_OPTIMIZER_AUTO_APPLY_SAFE', false),
+    'recommendation_limit' => (int) env('DB_OPTIMIZER_RECOMMENDATION_LIMIT', 8),
 
     /*
     |--------------------------------------------------------------------------
