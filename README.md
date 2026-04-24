@@ -16,6 +16,7 @@ Install note:
 - Auto `EXPLAIN` on slow queries
 - Cache candidate hints
 - Advanced optimization suggestions with code hints
+- Rewritten "New Query" suggestions shown under detected queries
 - Optional safe auto-apply eligibility flags
 - Built-in dashboard + remote scanner + protected agent API
 
