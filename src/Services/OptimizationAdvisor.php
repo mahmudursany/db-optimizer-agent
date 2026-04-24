@@ -20,7 +20,8 @@ class OptimizationAdvisor
         $recommendations = [];
         $sql = (string) ($metric['raw_sql'] ?? $event->sql);
         $normalizedSql = $this->normalizeSql($event->sql);
-        $currentLaravel = $this->buildLaravelBuilderFromSql($sql);
+        $sourceCurrent = trim((string) Arr::get($metric, 'source_code.current', ''));
+        $currentLaravel = $sourceCurrent !== '' ? $sourceCurrent : $this->buildLaravelBuilderFromSql($sql);
 
         if (str_starts_with($normalizedSql, 'select') && str_contains($normalizedSql, 'select *')) {
             $optimized = preg_replace('/\bselect\s+\*/i', 'SELECT id /* add required columns */', $sql) ?? $sql;
@@ -74,8 +75,8 @@ class OptimizationAdvisor
                 "Model::query()->with(['relationName'])->get();",
                 98,
                 false,
-                currentLaravel: null,
-                optimizedLaravel: null,
+                currentLaravel: $currentLaravel,
+                optimizedLaravel: $this->rewriteNPlusOneLaravel($currentLaravel),
             );
         }
 
@@ -97,7 +98,7 @@ class OptimizationAdvisor
                     false,
                     executableSql: $guardedSql,
                     currentLaravel: $currentLaravel,
-                    optimizedLaravel: $this->buildLaravelIndexMigrationSnippet($table, $column, $idxName),
+                    optimizedLaravel: "// Keep application query as-is, add index in MySQL\n// Run the 'Executable SQL (Safe/Guarded)' block below.",
                 );
             }
         }
@@ -234,34 +235,6 @@ DEALLOCATE PREPARE dbopt_query;
 SQL;
     }
 
-    private function buildLaravelIndexMigrationSnippet(string $table, string $column, string $indexName): string
-    {
-        $tableEsc = addslashes($table);
-        $columnEsc = addslashes($column);
-        $indexEsc = addslashes($indexName);
-
-        return <<<PHP
-use Illuminate\\Database\\Schema\\Blueprint;
-use Illuminate\\Support\\Facades\\DB;
-use Illuminate\\Support\\Facades\\Schema;
-
-Schema::table('{$tableEsc}', function (Blueprint \$table) {
-    \$exists = DB::selectOne("\
-        SELECT COUNT(1) AS c
-        FROM information_schema.statistics
-        WHERE table_schema = DATABASE()
-          AND table_name = '{$tableEsc}'
-          AND column_name = '{$columnEsc}'
-          AND seq_in_index = 1
-    ");
-
-    if (((int) (\$exists->c ?? 0)) === 0) {
-        \$table->index('{$columnEsc}', '{$indexEsc}');
-    }
-});
-PHP;
-    }
-
     private function optimizeSelectAllLaravel(string $currentLaravel): string
     {
         if ($currentLaravel === '') {
@@ -270,6 +243,20 @@ PHP;
 
         if (str_contains($currentLaravel, "->select('*')")) {
             return str_replace("->select('*')", "->select(['id']) // add required columns", $currentLaravel);
+        }
+
+        if (! str_contains($currentLaravel, '->select(')) {
+            if (str_contains($currentLaravel, '->first()')) {
+                return str_replace('->first()', "->select(['id']) // add required columns\n    ->first()", $currentLaravel);
+            }
+
+            if (str_contains($currentLaravel, '->paginate(')) {
+                return preg_replace('/->paginate\(([^\)]*)\)/', "->select(['id']) // add required columns\n    ->paginate($1)", $currentLaravel) ?? $currentLaravel;
+            }
+
+            if (str_contains($currentLaravel, '->get()')) {
+                return str_replace('->get()', "->select(['id']) // add required columns\n    ->get()", $currentLaravel);
+            }
         }
 
         return $currentLaravel;
@@ -286,6 +273,19 @@ PHP;
         }
 
         return "// Use exists() if checking only presence\n".$currentLaravel;
+    }
+
+    private function rewriteNPlusOneLaravel(string $currentLaravel): string
+    {
+        if ($currentLaravel === '') {
+            return "// N+1 hint\nModel::query()->with(['relationName'])->get();";
+        }
+
+        if (str_contains($currentLaravel, '->get()') && ! str_contains($currentLaravel, '->with(')) {
+            return str_replace('->get()', "->with(['relationName'])->get()", $currentLaravel);
+        }
+
+        return "// Add eager loading in the base query\n".$currentLaravel;
     }
 
     private function buildLaravelBuilderFromSql(string $sql): string

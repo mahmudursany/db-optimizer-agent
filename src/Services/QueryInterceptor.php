@@ -34,6 +34,10 @@ class QueryInterceptor
             return;
         }
 
+        if ($this->shouldIgnoreSql($event->sql)) {
+            return;
+        }
+
         $sampleRate = (float) config('db_optimizer.sample_rate', 1.0);
 
         if ($sampleRate < 1 && mt_rand() / mt_getrandmax() > $sampleRate) {
@@ -48,6 +52,10 @@ class QueryInterceptor
         $exactCount = $this->incrementCounter($this->exactQueryCounters, $exactSignature);
 
         $origin = $this->originResolver->resolve();
+        $sourceCode = $this->extractSourceCodeSnippet(
+            is_string($origin['file'] ?? null) ? $origin['file'] : null,
+            isset($origin['line']) ? (int) $origin['line'] : null,
+        );
 
         $metric = [
             'connection' => $event->connectionName,
@@ -58,6 +66,9 @@ class QueryInterceptor
             'raw_sql' => $this->toRawSql($event->sql, $event->bindings),
             'fingerprint' => $fingerprint,
             'origin' => $origin,
+            'source_code' => [
+                'current' => $sourceCode,
+            ],
             'detectors' => [
                 'n_plus_one' => $this->nPlusOneSignal($event->sql, $fingerprintCount, $origin),
                 'missing_indexes' => $this->suggestMissingIndexes($event->sql, $event->connectionName),
@@ -405,5 +416,45 @@ class QueryInterceptor
         }
 
         return $result;
+    }
+
+    private function shouldIgnoreSql(string $sql): bool
+    {
+        $normalized = $this->normalizeSql($sql);
+
+        if (str_starts_with($normalized, 'explain ')) {
+            return true;
+        }
+
+        return str_contains($normalized, 'from information_schema.statistics');
+    }
+
+    private function extractSourceCodeSnippet(?string $relativeFile, ?int $line): ?string
+    {
+        if (! is_string($relativeFile) || $relativeFile === '' || $line === null || $line < 1) {
+            return null;
+        }
+
+        $absolutePath = str_starts_with($relativeFile, '/')
+            ? $relativeFile
+            : base_path($relativeFile);
+
+        if (! is_file($absolutePath) || ! is_readable($absolutePath)) {
+            return null;
+        }
+
+        $lines = @file($absolutePath, FILE_IGNORE_NEW_LINES);
+
+        if (! is_array($lines) || $lines === []) {
+            return null;
+        }
+
+        $total = count($lines);
+        $start = max(1, $line - 6);
+        $end = min($total, $line + 12);
+
+        $slice = array_slice($lines, $start - 1, $end - $start + 1);
+
+        return implode("\n", $slice);
     }
 }

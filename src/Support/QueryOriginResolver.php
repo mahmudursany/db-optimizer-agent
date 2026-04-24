@@ -40,6 +40,8 @@ class QueryOriginResolver
 
         return str_contains($normalized, '/vendor/')
             || str_contains($normalized, '/packages/db-optimizer-agent/')
+            || str_contains($normalized, '/storage/framework/views/')
+            || str_contains($normalized, '/storage/framework/cache/')
             || str_contains($normalized, '/bootstrap/app.php')
             || str_contains($normalized, '/public/index.php');
     }
