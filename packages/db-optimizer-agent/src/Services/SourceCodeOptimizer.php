@@ -89,29 +89,32 @@ class SourceCodeOptimizer
         $collectionRelations = [];  // collectionVar => [relation, ...]
         $objectRelations     = [];  // objectVar     => [relation, ...]
         $lazyIndexes         = [];  // line indexes to remove
+        $aliases             = [];  // var => ['parent' => parentVar, 'rel' => relation]
 
-        $pattern = '/^\s*(?:\$[a-zA-Z_\x7f-\xff][a-zA-Z0-9_\x7f-\xff]*\s*=\s*)?\$([a-zA-Z_\x7f-\xff][a-zA-Z0-9_\x7f-\xff]*)->([a-zA-Z_\x7f-\xff][a-zA-Z0-9_\x7f-\xff]*)\s*;\s*(?:\/\/.*)?$/';
+        $accessPattern = '/^\s*(?:(?:\$([a-zA-Z0-9_\x7f-\xff]+)\s*=\s*)(?:\$[a-zA-Z0-9_\x7f-\xff]+\s*\?\s*)?)?\$([a-zA-Z0-9_\x7f-\xff]+)->([a-zA-Z0-9_\x7f-\xff]+)\s*(?:\:\s*null\s*)?;\s*(?:\/\/.*)?$/';
         $pureAccessPattern = '/^\s*\$[a-zA-Z_\x7f-\xff][a-zA-Z0-9_\x7f-\xff]*->[a-zA-Z_\x7f-\xff][a-zA-Z0-9_\x7f-\xff]*\s*;\s*(?:\/\/.*)?$/';
 
         foreach ($lines as $i => $line) {
-            // Pattern: optional $assignment = $var->relation; (with optional trailing // comment)
-            if (! preg_match($pattern, $line, $m)) {
+            if (! preg_match($accessPattern, $line, $m)) {
                 continue;
             }
 
-            $var      = $m[1];
-            $relation = $m[2];
+            $assignedVar = $m[1] ?? '';
+            $var         = $m[2];
+            $relation    = $m[3];
 
             if ($this->looksLikeColumn($relation)) {
                 continue;
             }
 
+            if (!empty($assignedVar)) {
+                $aliases[$assignedVar] = ['parent' => $var, 'rel' => $relation];
+            }
+
             if (isset($itemToCollection[$var])) {
-                // Inside a foreach — lazy load on collection item
                 $col = $itemToCollection[$var];
                 $collectionRelations[$col][] = $relation;
             } else {
-                // Direct lazy load on a single object
                 $objectRelations[$var][] = $relation;
             }
 
@@ -120,15 +123,44 @@ class SourceCodeOptimizer
             }
         }
 
-        // deduplicate
-        foreach ($collectionRelations as &$rels) {
+        // Resolve nested aliases
+        $resolvedCollectionRels = [];
+        $resolvedObjectRels     = [];
+
+        foreach ($objectRelations as $var => $rels) {
+            foreach ($rels as $rel) {
+                $currentVar = $var;
+                $path       = $rel;
+                while (isset($aliases[$currentVar])) {
+                    $alias      = $aliases[$currentVar];
+                    $path       = $alias['rel'] . '.' . $path;
+                    $currentVar = $alias['parent'];
+                }
+                $resolvedObjectRels[$currentVar][] = $path;
+            }
+        }
+
+        foreach ($collectionRelations as $col => $rels) {
+            foreach ($rels as $rel) {
+                $currentVar = $col;
+                $path       = $rel;
+                while (isset($aliases[$currentVar])) {
+                    $alias      = $aliases[$currentVar];
+                    $path       = $alias['rel'] . '.' . $path;
+                    $currentVar = $alias['parent'];
+                }
+                $resolvedCollectionRels[$currentVar][] = $path;
+            }
+        }
+
+        foreach ($resolvedCollectionRels as &$rels) {
             $rels = array_values(array_unique($rels));
         }
-        foreach ($objectRelations as &$rels) {
+        foreach ($resolvedObjectRels as &$rels) {
             $rels = array_values(array_unique($rels));
         }
 
-        return [$collectionRelations, $objectRelations, $lazyIndexes];
+        return [$resolvedCollectionRels, $resolvedObjectRels, $lazyIndexes];
     }
 
     private function looksLikeColumn(string $name): bool
@@ -166,7 +198,7 @@ class SourceCodeOptimizer
             }
 
             $formattedRelations = array_map(function($rel) {
-                return "'{$rel}:id /* add needed columns */'";
+                return "'{$rel}:id,name /* add other columns */'";
             }, $relations);
             
             $withInner = implode(",\n        ", $formattedRelations);
@@ -174,43 +206,40 @@ class SourceCodeOptimizer
                 ? "with(" . $formattedRelations[0] . ")" 
                 : "with([\n        " . $withInner . "\n    ])";
 
-            // Find: $var = SomeModel:: (the assignment line)
-            $assignLine = null;
+            // Find ALL assignments: $var = SomeModel::
+            $assignLines = [];
 
             for ($i = 0; $i < count($lines); $i++) {
                 if (preg_match('/\$' . preg_quote($var, '/') . '\s*=\s*[A-Z]/', $lines[$i])) {
-                    $assignLine = $i;
-                    break;
+                    $assignLines[] = $i;
                 }
             }
 
-            if ($assignLine === null) {
+            if (empty($assignLines)) {
                 continue;
             }
 
-            // Find end of this assignment (the line ending in ;)
-            $end = $assignLine;
-            while ($end < count($lines) - 1 && ! preg_match('/;\s*(?:\/\/.*)?$/', $lines[$end])) {
-                $end++;
-            }
+            foreach ($assignLines as $assignLine) {
+                // Check if ->with() already present in this block
+                $end = $assignLine;
+                while ($end < count($lines) - 1 && ! preg_match('/;\s*(?:\/\/.*)?$/', $lines[$end])) {
+                    $end++;
+                }
+                $block = implode(' ', array_slice($lines, $assignLine, $end - $assignLine + 1));
 
-            // Check if ->with() already present in this block
-            $block = implode(' ', array_slice($lines, $assignLine, $end - $assignLine + 1));
+                if (str_contains($block, '->with(')) {
+                    continue;
+                }
 
-            if (str_contains($block, '->with(')) {
-                continue;
-            }
-
-            // Inject right after `ModelName::` on the assignment line
-            if (preg_match('/([A-Z][\w\\\\]*::)/', $lines[$assignLine])) {
-                $lines[$assignLine] = preg_replace(
-                    '/([A-Z][\w\\\\]*::)(?!with\()/',
-                    '$1' . $withCall . "\n    ->",
-                    $lines[$assignLine],
-                    1
-                ) ?? $lines[$assignLine];
-
-                continue;
+                // Inject right after `ModelName::` on the assignment line
+                if (preg_match('/([A-Z][\w\\\\]*::)/', $lines[$assignLine])) {
+                    $lines[$assignLine] = preg_replace(
+                        '/([A-Z][\w\\\\]*::)(?!with\()/',
+                        '$1' . $withCall . "\n    ->",
+                        $lines[$assignLine],
+                        1
+                    ) ?? $lines[$assignLine];
+                }
             }
         }
 
