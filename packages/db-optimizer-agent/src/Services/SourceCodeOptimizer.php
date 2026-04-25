@@ -193,16 +193,31 @@ class SourceCodeOptimizer
         foreach ($allRelations as $var => $relations) {
             $relations = array_values(array_unique($relations));
 
-            if (empty($relations)) {
+            // Filter out redundant parent relations (e.g., if 'user.shop' exists, remove 'user')
+            $filteredRelations = [];
+            foreach ($relations as $rel) {
+                $isParentOfAnother = false;
+                foreach ($relations as $otherRel) {
+                    if ($rel !== $otherRel && str_starts_with($otherRel, $rel . '.')) {
+                        $isParentOfAnother = true;
+                        break;
+                    }
+                }
+                if (!$isParentOfAnother) {
+                    $filteredRelations[] = $rel;
+                }
+            }
+
+            if (empty($filteredRelations)) {
                 continue;
             }
 
             $formattedRelations = array_map(function($rel) {
-                return "'{$rel}:id,name /* add other columns */'";
-            }, $relations);
+                return "'{$rel}:id,name'";
+            }, $filteredRelations);
             
             $withInner = implode(",\n        ", $formattedRelations);
-            $withCall = count($relations) === 1 
+            $withCall = count($filteredRelations) === 1 
                 ? "with(" . $formattedRelations[0] . ")" 
                 : "with([\n        " . $withInner . "\n    ])";
 
