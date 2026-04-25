@@ -140,19 +140,29 @@ class QueryInterceptor
     private function nPlusOneSignal(string $sql, int $repetition, array $origin): array
     {
         $threshold = (int) config('db_optimizer.n_plus_one_repeat_threshold', 5);
-        $isSelect = str_starts_with(strtolower(ltrim($sql)), 'select');
-        $hasWhereBinding = (bool) preg_match('/\bwhere\b.+\=\s*\?/i', $sql);
-        $looksLikeRelationLoad = (bool) preg_match('/\bwhere\b.+(?:_id|id)\b\s*=\s*\?/i', $sql);
-        $looksLikeSingleRow = $isSelect && $hasWhereBinding && $looksLikeRelationLoad;
+        $isSelect  = str_starts_with(strtolower(ltrim($sql)), 'select');
 
-        $suspected = $repetition >= $threshold && $looksLikeSingleRow;
+        // Match queries that look like single-row relation fetches:
+        // WHERE `post_id` = ? OR WHERE `id` = ?
+        $hasWhereBinding      = (bool) preg_match('/\bwhere\b.+?=\s*\?/i', $sql);
+        $looksLikeRelationLoad = (bool) preg_match('/\bwhere\b.+?`?(?:[a-z_]+_id|\bid)\b`?\s*=\s*\?/i', $sql);
+        $isLimitOne           = (bool) preg_match('/\blimit\s+1\b/i', $sql);
+
+        // Suspect N+1 when:
+        // 1. It's a SELECT with a WHERE ? binding
+        // 2. Looks like a relation lookup (has _id or id column)
+        // 3. Repeats >= threshold times in this request
+        $looksLikeSingleRow = $isSelect && $hasWhereBinding && ($looksLikeRelationLoad || $isLimitOne);
+        $suspected          = $repetition >= $threshold && $looksLikeSingleRow;
 
         return [
-            'is_suspected' => $suspected,
-            'reason' => $suspected ? 'Repeated single-row fetch pattern detected. Consider eager loading with with().' : null,
-            'repetition' => $repetition,
-            'origin_file' => Arr::get($origin, 'file'),
-            'origin_line' => Arr::get($origin, 'line'),
+            'is_suspected'  => $suspected,
+            'reason'        => $suspected
+                ? "This query ran {$repetition} times in one request — typical N+1 pattern. Use eager loading with with()."
+                : null,
+            'repetition'    => $repetition,
+            'origin_file'   => Arr::get($origin, 'file'),
+            'origin_line'   => Arr::get($origin, 'line'),
         ];
     }
 
@@ -429,7 +439,16 @@ class QueryInterceptor
             return true;
         }
 
-        return str_contains($normalized, 'from information_schema.statistics');
+        if (str_contains($normalized, 'from information_schema.statistics')) {
+            return true;
+        }
+
+        // Ignore Laravel session/cache internals
+        if (str_contains($normalized, 'from `sessions`') || str_contains($normalized, 'from sessions')) {
+            return true;
+        }
+
+        return false;
     }
 
     private function extractSourceCodeSnippet(?string $relativeFile, ?int $line): ?string
