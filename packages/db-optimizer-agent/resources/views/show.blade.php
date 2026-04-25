@@ -96,7 +96,8 @@
 
 							@foreach($recommendations as $rec)
 								@php
-									$suggestionKey = md5(($rec['title'] ?? '') . ($rec['current_laravel'] ?? ''));
+									$codeKey = !empty($rec['current_laravel']) ? $rec['current_laravel'] : ($rec['title'] ?? '');
+									$suggestionKey = md5($codeKey);
 									$alreadyShown = in_array($suggestionKey, $shownSuggestions);
 								@endphp
 

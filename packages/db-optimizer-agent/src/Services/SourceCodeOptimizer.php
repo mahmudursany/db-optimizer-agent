@@ -216,7 +216,7 @@ class SourceCodeOptimizer
             }
 
             $formattedRelations = array_map(function($rel) {
-                return "'{$rel}:id,name'";
+                return "'{$rel}:id /* add columns */'";
             }, $filteredRelations);
             
             $withInner = implode(",\n        ", $formattedRelations);
